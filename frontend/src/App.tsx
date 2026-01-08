@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Automation from './pages/Automation';
+import Org from './pages/Org';
 import Report from './pages/Report';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -26,6 +27,7 @@ function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="org" element={<Org />} />
         <Route path="automation" element={<Automation />} />
         <Route path="automation/:id" element={<Automation />} />
         <Route path="report" element={<Report />} />
