@@ -79,6 +79,11 @@ export class DatabaseService implements OnModuleDestroy {
       return (result.rows || []) as T[];
     } catch (error) {
       this.logger.error(`Query failed: ${error.message}`, error.stack, 'DatabaseService');
+      // 연결 실패 시 pool을 null로 설정하여 다음 요청에서 dev mode로 전환
+      if (error.message?.includes('NJS-') || error.message?.includes('connection')) {
+        this.pool = null;
+        this.initialized = false;
+      }
       throw error;
     } finally {
       if (connection) {
