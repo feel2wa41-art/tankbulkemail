@@ -13,6 +13,8 @@ import {
 export interface LogQueryParams {
   orgId?: number;
   automationId?: number;
+  autoId?: number;
+  runId?: number;
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -49,13 +51,20 @@ export const reportApi = {
   },
 };
 
+export interface PaginatedLogResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export const logApi = {
-  getAutomationLogs: async (params: LogQueryParams): Promise<ApiResponse<AutoRunLog[]>> => {
+  getAutomationLogs: async (params: LogQueryParams): Promise<ApiResponse<PaginatedLogResponse<AutoRunLog>>> => {
     const response = await apiClient.get('/log/automation', { params });
     return response.data;
   },
 
-  getEmailLogs: async (params: LogQueryParams): Promise<ApiResponse<EmailSendLog[]>> => {
+  getEmailLogs: async (params: LogQueryParams): Promise<ApiResponse<PaginatedLogResponse<EmailSendLog>>> => {
     const response = await apiClient.get('/log/email', { params });
     return response.data;
   },

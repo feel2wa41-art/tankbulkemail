@@ -7,7 +7,7 @@ dotenv.config({ path: '.env.local' });
 
 import { createLogger } from './config/logger';
 import { SchedulerService } from './services/scheduler.service';
-import { createManualTriggerServer } from './services/trigger.service';
+import { createManualTriggerServer, setSchedulerRef } from './services/trigger.service';
 import { closeQueues, getRedisConnection } from './config/queue';
 
 const logger = createLogger('Main');
@@ -37,6 +37,9 @@ async function bootstrap() {
   // Initialize scheduler
   const schedulerEnabled = process.env.SCHEDULER_ENABLED === 'true';
   scheduler = new SchedulerService();
+
+  // Set scheduler reference for trigger service
+  setSchedulerRef(scheduler);
 
   if (schedulerEnabled) {
     await scheduler.start();
@@ -73,6 +76,7 @@ async function bootstrap() {
   logger.info('Tank Worker Engine started successfully');
   logger.info(`Manual trigger endpoint: http://localhost:${port}/trigger/{autoId}`);
   logger.info(`Health check endpoint: http://localhost:${port}/health`);
+  logger.info(`SES quota endpoint: http://localhost:${port}/quota`);
   logger.info('='.repeat(50));
 }
 

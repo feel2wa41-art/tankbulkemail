@@ -24,8 +24,8 @@ export default function Dashboard() {
         if (summaryRes.success) {
           setSummary(summaryRes.data);
         }
-        if (logsRes.success) {
-          setRecentLogs(logsRes.data);
+        if (logsRes.success && logsRes.data) {
+          setRecentLogs(logsRes.data.items || []);
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);

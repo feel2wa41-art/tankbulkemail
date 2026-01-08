@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Automation from './pages/Automation';
+import AutomationDetail from './pages/Automation/AutomationDetail';
 import Org from './pages/Org';
 import Report from './pages/Report';
 
@@ -29,7 +30,7 @@ function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="org" element={<Org />} />
         <Route path="automation" element={<Automation />} />
-        <Route path="automation/:id" element={<Automation />} />
+        <Route path="automation/:id" element={<AutomationDetail />} />
         <Route path="report" element={<Report />} />
         <Route path="settings" element={<Settings />} />
       </Route>

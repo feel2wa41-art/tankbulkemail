@@ -11,6 +11,11 @@ export const schedulerApi = {
     return response.data;
   },
 
+  getByAutomation: async (autoId: number): Promise<ApiResponse<Scheduler[]>> => {
+    const response = await apiClient.get('/scheduler', { params: { autoId } });
+    return response.data;
+  },
+
   create: async (data: CreateSchedulerDto): Promise<ApiResponse<Scheduler>> => {
     const response = await apiClient.post('/scheduler', data);
     return response.data;

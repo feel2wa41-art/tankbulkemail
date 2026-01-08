@@ -22,6 +22,7 @@ import { LogModule } from './modules/log/log.module';
 import { ReportModule } from './modules/report/report.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
+import { WorkerModule } from './modules/worker/worker.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { HealthModule } from './modules/health/health.module';
     ReportModule,
     StorageModule,
     HealthModule,
+    WorkerModule,
   ],
   providers: [
     {

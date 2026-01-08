@@ -2,15 +2,19 @@
  * Automation Service
  * 자동화 설정 비즈니스 로직
  */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { AutomationRepository } from './repositories/automation.repository';
 import { DatabaseService } from '../../config/database.service';
+import { WorkerService } from '../worker/worker.service';
 
 @Injectable()
 export class AutomationService {
+  private readonly logger = new Logger(AutomationService.name);
+
   constructor(
     private readonly automationRepository: AutomationRepository,
     private readonly databaseService: DatabaseService,
+    private readonly workerService: WorkerService,
   ) {}
 
   async findByOrg(orgId?: number) {
@@ -169,11 +173,28 @@ export class AutomationService {
   }
 
   async triggerRun(id: number) {
-    // TODO: BullMQ 작업 큐에 발송 작업 추가
+    this.logger.log(`Triggering automation run for ID: ${id}`);
+
+    // Worker에 트리거 요청
+    const result = await this.workerService.triggerAutomation(id);
+
+    if (!result.success) {
+      this.logger.error(`Failed to trigger automation ${id}: ${result.error}`);
+      return {
+        success: false,
+        message: result.error || 'Failed to trigger automation',
+      };
+    }
+
+    this.logger.log(`Automation ${id} triggered successfully: jobId=${result.jobId}`);
+
     return {
       success: true,
-      message: 'Automation run triggered',
-      data: { jobId: `job-${id}-${Date.now()}` },
+      message: 'Automation run triggered successfully',
+      data: {
+        runId: result.runId,
+        jobId: result.jobId,
+      },
     };
   }
 
