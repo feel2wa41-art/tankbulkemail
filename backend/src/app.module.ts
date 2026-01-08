@@ -9,6 +9,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 
 // Config
 import { LoggerModule } from './config/logger.module';
+import { DatabaseModule } from './config/database.module';
 
 // Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -41,6 +42,9 @@ import { HealthModule } from './modules/health/health.module';
 
     // Logger
     LoggerModule,
+
+    // Database
+    DatabaseModule,
 
     // Feature Modules
     AuthModule,
