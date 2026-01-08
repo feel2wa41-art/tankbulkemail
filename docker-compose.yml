@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - tank-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./config/.env
+    depends_on:
+      - redis
+    networks:
+      - tank-network
+    volumes:
+      - ./logs/backend:/app/logs
+      - file-storage:/app/files
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    env_file:
+      - ./config/.env
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - tank-network
+    volumes:
+      - ./logs/worker:/app/logs
+      - file-storage:/app/files
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - tank-network
+    volumes:
+      - redis-data:/data
+
+networks:
+  tank-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  file-storage:
