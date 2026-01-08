@@ -73,6 +73,38 @@ export class FileService {
     return results;
   }
 
+  async loadFile(filePath: string): Promise<FileInfo | null> {
+    try {
+      const stats = await fs.promises.stat(filePath);
+
+      if (!stats.isFile()) {
+        logger.warn(`Path is not a file: ${filePath}`);
+        return null;
+      }
+
+      const fileName = path.basename(filePath);
+      const content = await fs.promises.readFile(filePath);
+      const contentType = mime.lookup(fileName) || 'application/octet-stream';
+
+      logger.debug(`File loaded: ${fileName} (${stats.size} bytes)`);
+
+      return {
+        filePath,
+        fileName,
+        content,
+        contentType,
+        size: stats.size,
+      };
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        logger.warn(`File not found at path: ${filePath}`);
+      } else {
+        logger.error(`Error loading file ${filePath}:`, error);
+      }
+      return null;
+    }
+  }
+
   validateFileName(fileName: string): boolean {
     // Only allow safe characters: a-z, A-Z, 0-9, ., _, -
     const safePattern = /^[a-zA-Z0-9._-]+$/;
