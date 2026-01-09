@@ -46,6 +46,7 @@ export interface Automation {
   orgId: number;
   autoName: string;
   status: 'ACTIVE' | 'INACTIVE' | 'RUNNING';
+  targetQuery?: string;
   lastRunAt?: string;
   nextRunAt?: string;
   createdAt: string;
@@ -61,8 +62,9 @@ export interface CreateAutomationDto {
 export interface DbioTarget {
   targetId: number;
   autoId: number;
-  dbProfileId: number;
-  tableName: string;
+  dbProfileId?: number;
+  targetQuery: string;
+  tableName?: string;
   whereClause?: string;
 }
 
@@ -70,8 +72,10 @@ export interface DbioTarget {
 export interface Template {
   templateId: number;
   autoId: number;
-  subject: string;
-  bodyHtml: string;
+  subject?: string;
+  bodyHtml?: string;
+  subjectTemplate?: string;
+  bodyTemplate?: string;
   attachmentPattern?: string;
 }
 

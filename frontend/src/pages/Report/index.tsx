@@ -183,25 +183,21 @@ export default function Report() {
           title="Total Sent"
           value={loading ? '-' : (summary?.totalSent || 0).toLocaleString()}
           color="primary"
-          icon="📧"
         />
         <StatCard
           title="Success"
           value={loading ? '-' : (summary?.successCount || 0).toLocaleString()}
           color="green"
-          icon="✅"
         />
         <StatCard
           title="Failed"
           value={loading ? '-' : (summary?.failCount || 0).toLocaleString()}
           color="red"
-          icon="❌"
         />
         <StatCard
           title="Success Rate"
           value={loading ? '-' : `${summary?.successRate || 0}%`}
           color="blue"
-          icon="📊"
         />
       </div>
 

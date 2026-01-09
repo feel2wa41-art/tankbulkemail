@@ -23,7 +23,7 @@ module.exports = {
     {
       name: 'tank-worker',
       cwd: './worker',
-      script: 'dist/worker.js',
+      script: 'dist/main.js',
       instances: 1,
       autorestart: true,
       watch: false,

@@ -2,12 +2,12 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { path: '/operator', label: 'Operator', icon: '📧' },
-  { path: '/org', label: 'Organization', icon: '🏢' },
-  { path: '/automation', label: 'Automation', icon: '⚙️' },
-  { path: '/report', label: 'Report', icon: '📈' },
-  { path: '/settings', label: 'Settings', icon: '🔧' },
+  { path: '/dashboard', label: 'Dashboard' },
+  { path: '/operator', label: 'Operator' },
+  { path: '/org', label: 'Organization' },
+  { path: '/automation', label: 'Automation' },
+  { path: '/report', label: 'Report' },
+  { path: '/settings', label: 'Settings' },
 ];
 
 export default function MainLayout() {
@@ -32,12 +32,11 @@ export default function MainLayout() {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center px-4 py-3 hover:bg-gray-700 ${
-                  isActive ? 'bg-gray-700 border-l-4 border-primary-500' : ''
+                `block px-4 py-3 hover:bg-gray-700 transition-colors ${
+                  isActive ? 'bg-gray-700 border-l-4 border-blue-500 text-white' : 'text-gray-300'
                 }`
               }
             >
-              <span className="mr-3">{item.icon}</span>
               {item.label}
             </NavLink>
           ))}

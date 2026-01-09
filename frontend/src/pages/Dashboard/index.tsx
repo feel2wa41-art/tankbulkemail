@@ -77,25 +77,21 @@ export default function Dashboard() {
           title="Total Sent (Today)"
           value={loading ? '-' : (summary?.totalSent || 0).toLocaleString()}
           color="primary"
-          icon="📧"
         />
         <StatCard
           title="Success Rate"
           value={loading ? '-' : `${summary?.successRate || 0}%`}
           color="green"
-          icon="✅"
         />
         <StatCard
           title="Active Automations"
           value={loading ? '-' : summary?.activeAutomations || 0}
           color="blue"
-          icon="⚙️"
         />
         <StatCard
           title="Failed (Today)"
           value={loading ? '-' : summary?.failCount || 0}
           color="red"
-          icon="❌"
         />
       </div>
 

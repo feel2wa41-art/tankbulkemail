@@ -6,7 +6,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, Input, Select } from '../../components/atoms';
 import { Modal, DataTable } from '../../components/molecules';
-import { automationApi, schedulerApi, logApi } from '../../api';
+import { automationApi, schedulerApi, logApi, dbProfileApi } from '../../api';
+import { DbProfile } from '../../api/dbprofile';
 import {
   Automation,
   Template,
@@ -27,24 +28,31 @@ export default function AutomationDetail() {
   const [_template, setTemplate] = useState<Template | null>(null);
   const [schedules, setSchedules] = useState<Scheduler[]>([]);
   const [runLogs, setRunLogs] = useState<AutoRunLog[]>([]);
+  const [dbProfiles, setDbProfiles] = useState<DbProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('template');
+  const [activeTab, setActiveTab] = useState<TabType>('target');
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [testingQuery, setTestingQuery] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_queryPreview, setQueryPreview] = useState<any[]>([]);
 
   // Form states
+  const [targetForm, setTargetForm] = useState({
+    targetQuery: '',
+  });
+
   const [templateForm, setTemplateForm] = useState({
-    subject: '',
-    bodyHtml: '',
-    attachmentPattern: '',
+    subjectTemplate: '',
+    bodyTemplate: '',
   });
 
   const [emailForm, setEmailForm] = useState({
-    fromEmail: '',
-    fromName: '',
+    senderEmail: '',
+    senderName: '',
     replyTo: '',
-    ccList: '',
-    bccList: '',
+    recipientField: 'EMAIL',
+    attachmentPattern: '',
   });
 
   const [scheduleForm, setScheduleForm] = useState<CreateSchedulerDto>({
@@ -62,23 +70,27 @@ export default function AutomationDetail() {
 
     try {
       setLoading(true);
-      const [autoRes, templateRes, scheduleRes, logRes] = await Promise.all([
+      const [autoRes, templateRes, scheduleRes, logRes, dbProfileRes] = await Promise.all([
         automationApi.getById(autoId),
         automationApi.getTemplate(autoId).catch(() => ({ success: false, data: null })),
         schedulerApi.getByAutomation(autoId).catch(() => ({ success: false, data: [] })),
         logApi.getAutomationLogs({ autoId, page: 1, pageSize: 10 }).catch(() => ({ success: false, data: { items: [] } })),
+        dbProfileApi.findAll().catch(() => ({ success: false, data: [] })),
       ]);
 
       if (autoRes.success) {
         setAutomation(autoRes.data);
+        // Load target query if exists
+        if (autoRes.data.targetQuery) {
+          setTargetForm({ targetQuery: autoRes.data.targetQuery });
+        }
       }
 
       if (templateRes.success && templateRes.data) {
         setTemplate(templateRes.data);
         setTemplateForm({
-          subject: templateRes.data.subject || '',
-          bodyHtml: templateRes.data.bodyHtml || '',
-          attachmentPattern: templateRes.data.attachmentPattern || '',
+          subjectTemplate: templateRes.data.subjectTemplate || templateRes.data.subject || '',
+          bodyTemplate: templateRes.data.bodyTemplate || templateRes.data.bodyHtml || '',
         });
       }
 
@@ -88,6 +100,10 @@ export default function AutomationDetail() {
 
       if (logRes.success && logRes.data) {
         setRunLogs(logRes.data.items || []);
+      }
+
+      if (dbProfileRes.success) {
+        setDbProfiles(dbProfileRes.data || []);
       }
     } catch (error) {
       console.error('Failed to fetch automation details:', error);
@@ -144,11 +160,47 @@ export default function AutomationDetail() {
     }
   };
 
+  const handleSaveTarget = async () => {
+    if (!targetForm.targetQuery.trim()) {
+      alert('Please enter a target query');
+      return;
+    }
+    try {
+      setSaving(true);
+      await automationApi.setTarget(autoId, { targetQuery: targetForm.targetQuery });
+      alert('Target query saved successfully');
+      fetchData();
+    } catch (error) {
+      console.error('Failed to save target query:', error);
+      alert('Failed to save target query');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestQuery = async () => {
+    if (!targetForm.targetQuery.trim()) {
+      alert('Please enter a query to test');
+      return;
+    }
+    setTestingQuery(true);
+    setQueryPreview([]);
+    try {
+      // For now, just show a mock preview - actual implementation would call backend
+      alert('Query test feature requires backend implementation. Save the query and run automation to see actual results.');
+    } catch (error) {
+      console.error('Failed to test query:', error);
+      alert('Failed to test query');
+    } finally {
+      setTestingQuery(false);
+    }
+  };
+
   const handlePreview = async () => {
     try {
       const res = await automationApi.previewTemplate(autoId, {
-        subject: templateForm.subject,
-        bodyHtml: templateForm.bodyHtml,
+        subjectTemplate: templateForm.subjectTemplate,
+        bodyTemplate: templateForm.bodyTemplate,
         sampleData: {
           NAME: 'John Doe',
           EMAIL: 'john@example.com',
@@ -208,9 +260,10 @@ export default function AutomationDetail() {
   };
 
   const tabs: { key: TabType; label: string }[] = [
-    { key: 'template', label: 'Email Template' },
-    { key: 'email', label: 'Email Settings' },
-    { key: 'schedule', label: 'Schedule' },
+    { key: 'target', label: '1. Recipients' },
+    { key: 'template', label: '2. Template' },
+    { key: 'email', label: '3. Email Settings' },
+    { key: 'schedule', label: '4. Schedule' },
     { key: 'history', label: 'Run History' },
   ];
 
@@ -355,6 +408,73 @@ export default function AutomationDetail() {
         </nav>
       </div>
 
+      {/* Target Tab */}
+      {activeTab === 'target' && (
+        <Card>
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-medium text-blue-800 mb-2">How to Configure Recipients</h3>
+              <p className="text-sm text-blue-700">
+                Write a SQL query to fetch email recipients from your database.
+                The query must return at least an EMAIL column. Other columns can be used as template variables.
+              </p>
+            </div>
+
+            {dbProfiles.length === 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  No database profiles configured. Please add a DB profile in Settings first.
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Target Query (SQL)
+              </label>
+              <textarea
+                className="w-full h-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                value={targetForm.targetQuery}
+                onChange={(e) => setTargetForm({ ...targetForm, targetQuery: e.target.value })}
+                placeholder={`SELECT
+  EMAIL,
+  NAME,
+  COMPANY,
+  CUSTOMER_ID
+FROM CUSTOMERS
+WHERE STATUS = 'ACTIVE'
+  AND EMAIL IS NOT NULL`}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Required columns: EMAIL (recipient address).
+                Optional: Any columns you want to use in the email template.
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Available Template Variables</h4>
+              <p className="text-xs text-gray-600">
+                Each column returned by your query becomes a template variable.
+                Use {'{{COLUMN_NAME}}'} in your email template to insert the value.
+              </p>
+              <div className="mt-2 text-xs text-gray-500">
+                Example: If your query returns EMAIL, NAME, AMOUNT columns, you can use{' '}
+                {'{{EMAIL}}'}, {'{{NAME}}'}, {'{{AMOUNT}}'} in your template.
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button variant="secondary" onClick={handleTestQuery} loading={testingQuery}>
+                Test Query
+              </Button>
+              <Button onClick={handleSaveTarget} loading={saving}>
+                Save Target Query
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Template Tab */}
       {activeTab === 'template' && (
         <Card>
@@ -364,9 +484,9 @@ export default function AutomationDetail() {
                 Subject
               </label>
               <Input
-                value={templateForm.subject}
+                value={templateForm.subjectTemplate}
                 onChange={(e) =>
-                  setTemplateForm({ ...templateForm, subject: e.target.value })
+                  setTemplateForm({ ...templateForm, subjectTemplate: e.target.value })
                 }
                 placeholder="Email subject (use {{variable}} for dynamic content)"
               />
@@ -381,9 +501,9 @@ export default function AutomationDetail() {
               </label>
               <textarea
                 className="w-full h-64 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
-                value={templateForm.bodyHtml}
+                value={templateForm.bodyTemplate}
                 onChange={(e) =>
-                  setTemplateForm({ ...templateForm, bodyHtml: e.target.value })
+                  setTemplateForm({ ...templateForm, bodyTemplate: e.target.value })
                 }
                 placeholder="<html><body>Your email content here...</body></html>"
               />
@@ -391,22 +511,6 @@ export default function AutomationDetail() {
                 Supported variables: {'{{NAME}}'}, {'{{EMAIL}}'}, {'{{COMPANY}}'}, etc.
                 <br />
                 Helpers: {'{{formatDate DATE}}'}, {'{{formatNumber AMOUNT}}'}, {'{{#if CONDITION}}...{{/if}}'}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Attachment Pattern (Optional)
-              </label>
-              <Input
-                value={templateForm.attachmentPattern}
-                onChange={(e) =>
-                  setTemplateForm({ ...templateForm, attachmentPattern: e.target.value })
-                }
-                placeholder="invoice_{{ID}}.pdf"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                File name pattern for attachments. Use variables to match files.
               </p>
             </div>
 
@@ -429,73 +533,76 @@ export default function AutomationDetail() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  From Email *
+                  Sender Email *
                 </label>
                 <Input
                   type="email"
-                  value={emailForm.fromEmail}
+                  value={emailForm.senderEmail}
                   onChange={(e) =>
-                    setEmailForm({ ...emailForm, fromEmail: e.target.value })
+                    setEmailForm({ ...emailForm, senderEmail: e.target.value })
                   }
                   placeholder="noreply@company.com"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  From Name *
+                  Sender Name *
                 </label>
                 <Input
-                  value={emailForm.fromName}
+                  value={emailForm.senderName}
                   onChange={(e) =>
-                    setEmailForm({ ...emailForm, fromName: e.target.value })
+                    setEmailForm({ ...emailForm, senderName: e.target.value })
                   }
                   placeholder="Company Name"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reply-To (Optional)
-              </label>
-              <Input
-                type="email"
-                value={emailForm.replyTo}
-                onChange={(e) =>
-                  setEmailForm({ ...emailForm, replyTo: e.target.value })
-                }
-                placeholder="support@company.com"
-              />
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  CC (Optional)
+                  Reply-To (Optional)
                 </label>
                 <Input
-                  value={emailForm.ccList}
+                  type="email"
+                  value={emailForm.replyTo}
                   onChange={(e) =>
-                    setEmailForm({ ...emailForm, ccList: e.target.value })
+                    setEmailForm({ ...emailForm, replyTo: e.target.value })
                   }
-                  placeholder="cc1@example.com, cc2@example.com"
+                  placeholder="support@company.com"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Separate multiple emails with commas
-                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  BCC (Optional)
+                  Recipient Field
                 </label>
                 <Input
-                  value={emailForm.bccList}
+                  value={emailForm.recipientField}
                   onChange={(e) =>
-                    setEmailForm({ ...emailForm, bccList: e.target.value })
+                    setEmailForm({ ...emailForm, recipientField: e.target.value })
                   }
-                  placeholder="bcc@example.com"
+                  placeholder="EMAIL"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Column name from target query containing email address
+                </p>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Attachment Pattern (Optional)
+              </label>
+              <Input
+                value={emailForm.attachmentPattern}
+                onChange={(e) =>
+                  setEmailForm({ ...emailForm, attachmentPattern: e.target.value })
+                }
+                placeholder="invoice_{{ID}}.pdf"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                File name pattern for attachments. Use variables to match files.
+              </p>
             </div>
 
             <div className="flex justify-end pt-4 border-t">

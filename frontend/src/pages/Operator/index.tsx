@@ -1,12 +1,6 @@
 /**
  * Operator Dashboard
- * MTI 운영자용 간소화된 대시보드
- *
- * 기능:
- * - 발송 상태 표시
- * - 시작/중지/즉시실행 버튼
- * - 이번달 발송 현황
- * - 실패 목록 및 재발송
+ * Email automation control panel for operators
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { automationApi } from '../../api/automation';
@@ -48,7 +42,6 @@ const OperatorDashboard: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch automation info
       const autoRes = await automationApi.getAll();
       if (autoRes.success && autoRes.data?.[0]) {
         const auto = autoRes.data[0];
@@ -57,13 +50,12 @@ const OperatorDashboard: React.FC = () => {
           autoName: auto.autoName,
           status: auto.status,
           scheduleType: 'MONTHLY',
-          scheduleTime: '매월 1일 09:00',
+          scheduleTime: 'Monthly 1st, 09:00',
           lastRunAt: auto.lastRunAt,
           nextRunAt: auto.nextRunAt,
         });
       }
 
-      // Fetch statistics
       const statsRes = await reportApi.getSummary();
       if (statsRes.success && statsRes.data) {
         const totalSent = statsRes.data.totalSent || 0;
@@ -77,7 +69,6 @@ const OperatorDashboard: React.FC = () => {
         });
       }
 
-      // Check worker status
       try {
         const healthRes = await workerApi.checkHealth();
         const status = healthRes.data?.status;
@@ -86,7 +77,6 @@ const OperatorDashboard: React.FC = () => {
         setWorkerStatus('unhealthy');
       }
 
-      // Fetch failed items (from worker API)
       try {
         const failedRes = await workerApi.getFailedJobs(automation?.autoId);
         if (failedRes.success && failedRes.data) {
@@ -121,9 +111,9 @@ const OperatorDashboard: React.FC = () => {
     try {
       await automationApi.update(automation.autoId, { status: 'ACTIVE' });
       setAutomation(prev => prev ? { ...prev, status: 'ACTIVE' } : null);
-      alert('자동 발송이 활성화되었습니다.');
+      alert('Automation activated successfully.');
     } catch {
-      alert('활성화에 실패했습니다.');
+      alert('Failed to activate automation.');
     } finally {
       setActionLoading(false);
     }
@@ -135,9 +125,9 @@ const OperatorDashboard: React.FC = () => {
     try {
       await automationApi.update(automation.autoId, { status: 'INACTIVE' });
       setAutomation(prev => prev ? { ...prev, status: 'INACTIVE' } : null);
-      alert('자동 발송이 일시정지되었습니다.');
+      alert('Automation paused successfully.');
     } catch {
-      alert('일시정지에 실패했습니다.');
+      alert('Failed to pause automation.');
     } finally {
       setActionLoading(false);
     }
@@ -145,173 +135,158 @@ const OperatorDashboard: React.FC = () => {
 
   const handleRunNow = async () => {
     if (!automation) return;
-    if (!confirm('지금 즉시 이메일 발송을 시작하시겠습니까?')) return;
+    if (!confirm('Start email sending now?')) return;
 
     setActionLoading(true);
     try {
       await automationApi.run(automation.autoId);
-      alert('발송이 시작되었습니다. 잠시 후 결과를 확인하세요.');
+      alert('Email sending started. Please check the results shortly.');
       setTimeout(fetchData, 3000);
     } catch {
-      alert('발송 시작에 실패했습니다.');
+      alert('Failed to start sending.');
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleRetryFailed = async (jobId: string) => {
-    if (!confirm('이 건을 재발송하시겠습니까?')) return;
+    if (!confirm('Retry this failed email?')) return;
     try {
       await workerApi.retryFailedJob(jobId);
-      alert('재발송이 요청되었습니다.');
+      alert('Retry requested successfully.');
       fetchData();
     } catch {
-      alert('재발송 요청에 실패했습니다.');
+      alert('Failed to request retry.');
     }
   };
 
   const handleRetryAll = async () => {
-    if (!confirm(`실패한 ${failedItems.length}건 전체를 재발송하시겠습니까?`)) return;
+    if (!confirm(`Retry all ${failedItems.length} failed emails?`)) return;
     try {
       await workerApi.retryAllFailed(automation?.autoId);
-      alert('전체 재발송이 요청되었습니다.');
+      alert('Retry all requested successfully.');
       fetchData();
     } catch {
-      alert('재발송 요청에 실패했습니다.');
+      alert('Failed to request retry.');
     }
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen text-lg">
-        로딩 중...
+      <div className="flex justify-center items-center h-96 text-gray-500">
+        Loading...
       </div>
     );
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusStyle = (status: string) => {
     switch (status) {
-      case 'ACTIVE': return 'bg-green-100';
-      case 'RUNNING': return 'bg-blue-100';
-      default: return 'bg-yellow-100';
+      case 'ACTIVE': return { bg: 'bg-green-50 border-green-200', dot: 'bg-green-500', text: 'Active' };
+      case 'RUNNING': return { bg: 'bg-blue-50 border-blue-200', dot: 'bg-blue-500 animate-pulse', text: 'Running' };
+      default: return { bg: 'bg-gray-50 border-gray-200', dot: 'bg-gray-400', text: 'Paused' };
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return '자동 발송 활성화';
-      case 'RUNNING': return '발송 진행 중...';
-      default: return '일시정지';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return '🟢';
-      case 'RUNNING': return '🔄';
-      default: return '⏸️';
-    }
-  };
-
+  const statusStyle = getStatusStyle(automation?.status || 'INACTIVE');
   const progressPercent = stats.total > 0 ? (stats.success / stats.total) * 100 : 0;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 font-sans">
+    <div className="max-w-4xl mx-auto p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold">
-          📧 {automation?.autoName || '이메일 자동 발송 시스템'}
-        </h1>
-        <span className={`px-4 py-2 rounded-full text-sm ${workerStatus === 'healthy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {workerStatus === 'healthy' ? '🟢 시스템 정상' : '🔴 시스템 점검 필요'}
-        </span>
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">
+            {automation?.autoName || 'Email Automation'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">Operator Dashboard</p>
+        </div>
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${
+          workerStatus === 'healthy'
+            ? 'bg-green-50 text-green-700 border border-green-200'
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${workerStatus === 'healthy' ? 'bg-green-500' : 'bg-red-500'}`} />
+          {workerStatus === 'healthy' ? 'System Online' : 'System Offline'}
+        </div>
       </div>
 
       {/* Status Card */}
-      <div className={`flex items-center gap-5 p-6 rounded-2xl mb-6 ${getStatusColor(automation?.status || 'INACTIVE')}`}>
-        <div className="text-5xl">
-          {getStatusIcon(automation?.status || 'INACTIVE')}
-        </div>
+      <div className={`flex items-center gap-4 p-5 rounded-lg border mb-6 ${statusStyle.bg}`}>
+        <span className={`w-4 h-4 rounded-full ${statusStyle.dot}`} />
         <div className="flex-1">
-          <div className="text-sm text-gray-600">현재 상태</div>
-          <div className="text-2xl font-semibold">
-            {getStatusText(automation?.status || 'INACTIVE')}
-          </div>
+          <div className="text-sm text-gray-500">Current Status</div>
+          <div className="text-lg font-medium text-gray-900">{statusStyle.text}</div>
         </div>
-        <div className="text-right text-gray-600">
-          <div>📅 {automation?.scheduleTime}</div>
+        <div className="text-right text-sm text-gray-600">
+          <div>Schedule: {automation?.scheduleTime}</div>
           {automation?.lastRunAt && (
-            <div className="text-xs mt-1">
-              마지막 실행: {new Date(automation.lastRunAt).toLocaleString('ko-KR')}
+            <div className="text-xs text-gray-400 mt-1">
+              Last run: {new Date(automation.lastRunAt).toLocaleString()}
             </div>
           )}
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-4 mb-8">
+      <div className="flex gap-3 mb-6">
         {automation?.status === 'ACTIVE' ? (
           <button
             onClick={handlePause}
             disabled={actionLoading}
-            className="flex-1 py-5 text-lg font-semibold rounded-xl bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-800 hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 py-3 px-4 text-sm font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            ⏸️ 일시정지
+            Pause
           </button>
         ) : (
           <button
             onClick={handleStart}
             disabled={actionLoading}
-            className="flex-1 py-5 text-lg font-semibold rounded-xl bg-gradient-to-r from-green-500 to-teal-500 text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 py-3 px-4 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            ▶️ 활성화
+            Activate
           </button>
         )}
         <button
           onClick={handleRunNow}
           disabled={actionLoading}
-          className="flex-1 py-5 text-lg font-semibold rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex-1 py-3 px-4 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          🚀 즉시 실행
+          Run Now
         </button>
       </div>
 
       {/* Statistics */}
-      <div className="bg-white rounded-2xl p-6 shadow-md mb-6">
-        <h2 className="text-lg font-semibold mb-5">📊 이번달 발송 현황</h2>
-        <div className="grid grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-gray-50 rounded-xl border-l-4 border-gray-500">
-            <div className="text-3xl font-bold">{stats.total.toLocaleString()}</div>
-            <div className="text-sm text-gray-600 mt-1">전체 대상</div>
+      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+        <h2 className="text-sm font-medium text-gray-700 mb-4">Monthly Statistics</h2>
+        <div className="grid grid-cols-4 gap-3">
+          <div className="text-center p-3 bg-gray-50 rounded border border-gray-100">
+            <div className="text-2xl font-semibold text-gray-900">{stats.total.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 mt-1">Total</div>
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-xl border-l-4 border-green-500">
-            <div className="text-3xl font-bold">{stats.success.toLocaleString()}</div>
-            <div className="text-sm text-gray-600 mt-1">✅ 성공</div>
+          <div className="text-center p-3 bg-green-50 rounded border border-green-100">
+            <div className="text-2xl font-semibold text-green-700">{stats.success.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 mt-1">Success</div>
           </div>
-          <div className="text-center p-4 bg-red-50 rounded-xl border-l-4 border-red-500">
-            <div className="text-3xl font-bold">{stats.failed.toLocaleString()}</div>
-            <div className="text-sm text-gray-600 mt-1">❌ 실패</div>
+          <div className="text-center p-3 bg-red-50 rounded border border-red-100">
+            <div className="text-2xl font-semibold text-red-700">{stats.failed.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 mt-1">Failed</div>
           </div>
-          <div className="text-center p-4 bg-yellow-50 rounded-xl border-l-4 border-yellow-500">
-            <div className="text-3xl font-bold">{stats.pending.toLocaleString()}</div>
-            <div className="text-sm text-gray-600 mt-1">⏳ 대기</div>
+          <div className="text-center p-3 bg-amber-50 rounded border border-amber-100">
+            <div className="text-2xl font-semibold text-amber-700">{stats.pending.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 mt-1">Pending</div>
           </div>
         </div>
 
         {stats.total > 0 && (
-          <div className="mt-5">
-            <div className="h-6 bg-gray-200 rounded-full overflow-hidden relative">
+          <div className="mt-4">
+            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className="absolute left-0 top-0 h-full bg-gradient-to-r from-green-500 to-teal-500"
+                className="h-full bg-green-500 transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
               />
-              <div
-                className="absolute top-0 h-full bg-red-500"
-                style={{ left: `${progressPercent}%`, width: `${(stats.failed / stats.total) * 100}%` }}
-              />
             </div>
-            <div className="text-center mt-2 text-gray-600">
-              {progressPercent.toFixed(1)}% 완료
+            <div className="text-center mt-2 text-xs text-gray-500">
+              {progressPercent.toFixed(1)}% Complete
             </div>
           </div>
         )}
@@ -319,34 +294,34 @@ const OperatorDashboard: React.FC = () => {
 
       {/* Failed Items */}
       {failedItems.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 shadow-md mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-red-600">
-              ❌ 발송 실패 목록 ({failedItems.length}건)
+            <h2 className="text-sm font-medium text-red-700">
+              Failed Emails ({failedItems.length})
             </h2>
             <button
               onClick={handleRetryAll}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600"
+              className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
             >
-              🔄 전체 재발송
+              Retry All
             </button>
           </div>
-          <div className="flex flex-col gap-3 max-h-72 overflow-y-auto">
+          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
             {failedItems.map((item) => (
               <div
                 key={item.logId}
-                className="flex justify-between items-center p-4 bg-red-50 rounded-lg border-l-4 border-red-500"
+                className="flex justify-between items-center p-3 bg-red-50 rounded border border-red-100"
               >
-                <div className="flex-1">
-                  <div className="font-semibold">{item.email}</div>
-                  <div className="text-sm text-gray-600">{item.merchantName}</div>
-                  <div className="text-xs text-red-600 mt-1">{item.errorMessage}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">{item.email}</div>
+                  <div className="text-xs text-gray-500 truncate">{item.merchantName}</div>
+                  <div className="text-xs text-red-600 mt-0.5 truncate">{item.errorMessage}</div>
                 </div>
                 <button
                   onClick={() => handleRetryFailed(item.logId.toString())}
-                  className="px-3 py-1.5 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+                  className="ml-3 px-2.5 py-1 text-xs font-medium bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
-                  재발송
+                  Retry
                 </button>
               </div>
             ))}
@@ -354,8 +329,8 @@ const OperatorDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="text-center text-gray-500 text-sm">
-        💡 화면은 30초마다 자동 새로고침됩니다
+      <div className="text-center text-xs text-gray-400">
+        Auto-refresh every 30 seconds
       </div>
     </div>
   );

@@ -223,39 +223,98 @@ export default function AutomationPage() {
     ...orgs.map((org) => ({ value: org.orgId, label: org.orgName })),
   ];
 
+  // Show getting started guide when no automations exist
+  const showGettingStarted = !loading && automations.length === 0;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Automations</h1>
-        <Button onClick={() => handleOpenModal()}>+ New Automation</Button>
+        <Button onClick={() => handleOpenModal()} disabled={orgs.length === 0}>
+          + New Automation
+        </Button>
       </div>
 
-      <Card padding="none">
-        <div className="p-4 border-b">
-          <div className="flex gap-4">
-            <div className="w-64">
-              <Select
-                options={orgOptions}
-                onChange={handleOrgFilter}
-                value={selectedOrgId || ''}
-              />
+      {showGettingStarted ? (
+        <Card>
+          <div className="text-center py-12">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Getting Started</h2>
+            <p className="text-gray-600 mb-8 max-w-lg mx-auto">
+              Set up your first email automation in 4 simple steps.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 max-w-4xl mx-auto mb-8">
+              <div className={`p-4 rounded-lg border-2 ${orgs.length > 0 ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-gray-50'}`}>
+                <div className="text-2xl font-bold text-gray-400 mb-2">1</div>
+                <div className="font-medium text-gray-900">Organization</div>
+                <div className="text-sm text-gray-500 mt-1">
+                  {orgs.length > 0 ? `${orgs.length} configured` : 'Create an org first'}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg border-2 border-gray-300 bg-gray-50">
+                <div className="text-2xl font-bold text-gray-400 mb-2">2</div>
+                <div className="font-medium text-gray-900">Automation</div>
+                <div className="text-sm text-gray-500 mt-1">Create automation</div>
+              </div>
+
+              <div className="p-4 rounded-lg border-2 border-gray-300 bg-gray-50">
+                <div className="text-2xl font-bold text-gray-400 mb-2">3</div>
+                <div className="font-medium text-gray-900">Configure</div>
+                <div className="text-sm text-gray-500 mt-1">Recipients & Template</div>
+              </div>
+
+              <div className="p-4 rounded-lg border-2 border-gray-300 bg-gray-50">
+                <div className="text-2xl font-bold text-gray-400 mb-2">4</div>
+                <div className="font-medium text-gray-900">Schedule</div>
+                <div className="text-sm text-gray-500 mt-1">Set run time</div>
+              </div>
             </div>
-            <div className="flex-1 max-w-md">
-              <SearchBar
-                placeholder="Search automations..."
-                onSearch={handleSearch}
-              />
+
+            {orgs.length === 0 ? (
+              <div className="space-y-4">
+                <p className="text-amber-600 text-sm">
+                  You need to create an Organization first before creating automations.
+                </p>
+                <Button onClick={() => window.location.href = '/org'}>
+                  Go to Organizations
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={() => handleOpenModal()}>
+                Create Your First Automation
+              </Button>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <Card padding="none">
+          <div className="p-4 border-b">
+            <div className="flex gap-4">
+              <div className="w-64">
+                <Select
+                  options={orgOptions}
+                  onChange={handleOrgFilter}
+                  value={selectedOrgId || ''}
+                />
+              </div>
+              <div className="flex-1 max-w-md">
+                <SearchBar
+                  placeholder="Search automations..."
+                  onSearch={handleSearch}
+                />
+              </div>
             </div>
           </div>
-        </div>
-        <DataTable
-          columns={columns}
-          data={filteredAutomations}
-          loading={loading}
-          emptyMessage="No automations found"
-          onRowClick={handleRowClick}
-        />
-      </Card>
+          <DataTable
+            columns={columns}
+            data={filteredAutomations}
+            loading={loading}
+            emptyMessage="No automations found"
+            onRowClick={handleRowClick}
+          />
+        </Card>
+      )}
 
       {/* Create/Edit Modal */}
       <Modal
