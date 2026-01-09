@@ -4,9 +4,10 @@
  */
 import { Job } from 'bullmq';
 import { createLogger } from '../config/logger';
-import { OracleService } from '../services/oracle.service';
+import { OracleService, AutomationConfig, SftpConfig } from '../services/oracle.service';
 import { TemplateService } from '../services/template.service';
-import { FileService } from '../services/file.service';
+import { FileService, FileInfo } from '../services/file.service';
+import { SftpService } from '../services/sftp.service';
 import { SesService } from '../services/ses.service';
 import {
   getEmailSendQueue,
@@ -30,6 +31,7 @@ export class JobProcessor {
   private oracleService: OracleService;
   private templateService: TemplateService;
   private fileService: FileService;
+  private sftpService: SftpService;
   private sesService: SesService;
   private devMode: boolean;
   private batchSize: number;
@@ -39,6 +41,7 @@ export class JobProcessor {
     this.oracleService = new OracleService();
     this.templateService = new TemplateService();
     this.fileService = new FileService();
+    this.sftpService = new SftpService();
     this.sesService = new SesService();
     this.devMode = process.env.DEV_MODE === 'true';
     this.batchSize = parseInt(process.env.BATCH_SIZE || '100', 10);
@@ -116,12 +119,26 @@ export class JobProcessor {
             ...mappingData,
           });
 
-          // 3d: Find attachment file
+          // 3d: Find attachment file (local or SFTP)
           let attachmentPath: string | undefined;
-          if (target.attachFileName && automation.attachmentPattern) {
-            const attachment = await this.fileService.findFile(target.attachFileName);
-            if (attachment) {
-              attachmentPath = attachment.filePath;
+          let attachmentData: FileInfo | null = null;
+
+          if (target.attachFileName) {
+            if (automation.sftpConfig) {
+              // Use SFTP to fetch attachment
+              attachmentData = await this.sftpService.downloadFile(
+                automation.sftpConfig,
+                target.attachFileName
+              );
+              if (attachmentData) {
+                logger.debug(`Attachment fetched via SFTP: ${target.attachFileName}`);
+              }
+            } else {
+              // Use local file system
+              attachmentData = await this.fileService.findFile(target.attachFileName);
+              if (attachmentData) {
+                attachmentPath = attachmentData.filePath;
+              }
             }
           }
 
@@ -138,6 +155,13 @@ export class JobProcessor {
               senderEmail: automation.senderEmail,
               senderName: automation.senderName,
               attachmentPath,
+              // For SFTP attachments, include the data directly
+              attachmentData: attachmentData && automation.sftpConfig ? {
+                fileName: attachmentData.fileName,
+                content: attachmentData.content.toString('base64'),
+                contentType: attachmentData.contentType,
+                size: attachmentData.size,
+              } : undefined,
             },
             {
               priority: 1,
@@ -193,12 +217,24 @@ export class JobProcessor {
   }
 
   private async processSingleEmail(data: EmailSendData): Promise<void> {
-    const { runId, email, subject, htmlBody, senderEmail, senderName, attachmentPath } = data;
+    const { runId, email, subject, htmlBody, senderEmail, senderName, attachmentPath, attachmentData } = data;
 
     try {
-      // Load attachment if exists
-      let attachment = null;
-      if (attachmentPath) {
+      // Load attachment - either from path or from pre-loaded data (SFTP)
+      let attachment: FileInfo | null = null;
+
+      if (attachmentData) {
+        // Attachment was pre-loaded (e.g., from SFTP)
+        attachment = {
+          filePath: '',
+          fileName: attachmentData.fileName,
+          content: Buffer.from(attachmentData.content, 'base64'),
+          contentType: attachmentData.contentType,
+          size: attachmentData.size,
+        };
+        logger.debug(`Using pre-loaded attachment: ${attachmentData.fileName}`);
+      } else if (attachmentPath) {
+        // Load from local file system
         attachment = await this.fileService.loadFile(attachmentPath);
       }
 

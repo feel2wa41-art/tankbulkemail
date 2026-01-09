@@ -2,8 +2,8 @@
  * Worker Controller
  * Worker 상태 확인 및 관리 API
  */
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { WorkerService } from './worker.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -34,5 +34,33 @@ export class WorkerController {
       success: quota !== null,
       data: quota,
     };
+  }
+
+  @Get('queue/status')
+  @ApiOperation({ summary: 'Get queue status' })
+  async getQueueStatus() {
+    return this.workerService.getQueueStatus();
+  }
+
+  @Get('queue/failed')
+  @ApiOperation({ summary: 'Get failed jobs' })
+  @ApiQuery({ name: 'autoId', required: false })
+  async getFailedJobs(@Query('autoId') autoId?: string) {
+    const parsedAutoId = autoId ? parseInt(autoId, 10) : undefined;
+    return this.workerService.getFailedJobs(parsedAutoId);
+  }
+
+  @Post('queue/retry/:jobId')
+  @ApiOperation({ summary: 'Retry a specific failed job' })
+  async retryJob(@Param('jobId') jobId: string) {
+    return this.workerService.retryJob(jobId);
+  }
+
+  @Post('queue/retry-all')
+  @ApiOperation({ summary: 'Retry all failed jobs' })
+  @ApiQuery({ name: 'autoId', required: false })
+  async retryAllJobs(@Query('autoId') autoId?: string) {
+    const parsedAutoId = autoId ? parseInt(autoId, 10) : undefined;
+    return this.workerService.retryAllJobs(parsedAutoId);
   }
 }

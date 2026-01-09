@@ -18,7 +18,7 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "typeRoots": ["./node_modules/@types", "./src/types"],
-    "types": ["node", "jest", "cron", "mime-types", "uuid", "nodemailer"],
+    "types": ["node", "jest", "cron", "mime-types", "uuid", "nodemailer", "ssh2-sftp-client"],
     "paths": {
       "@/*": ["src/*"],
       "@shared/*": ["../shared/*"]

@@ -151,7 +151,7 @@ export interface User {
 }
 
 export interface LoginDto {
-  loginId: string;
+  userId: string;
   password: string;
 }
 

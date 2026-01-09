@@ -307,6 +307,85 @@ GET /api/v1/health
 
 ---
 
+## Deployment Architecture
+
+### 고객사 납품 시나리오 (MTI 예시)
+
+고객사는 일반적으로 자체 Oracle DB 서버를 보유하고 있음.
+Tank 시스템만 설치하여 기존 Oracle에 연결하는 구조.
+
+```
+┌─────────────────────────────────────────────────────┐
+│              고객사 사내 네트워크                     │
+│                                                     │
+│   ┌─────────────────┐    ┌─────────────────┐       │
+│   │  Oracle DB 서버  │◄───│  Tank 시스템     │       │
+│   │  (기존 가맹점DB) │    │  (신규 설치)     │       │
+│   │  192.168.x.x    │    │  192.168.x.x    │       │
+│   └─────────────────┘    └─────────────────┘       │
+│                                 │                   │
+│                          ┌──────┴──────┐           │
+│                          │   Redis     │           │
+│                          └─────────────┘           │
+└─────────────────────────────────────────────────────┘
+                     │
+                     ▼ (HTTPS 아웃바운드)
+              ┌─────────────┐
+              │  AWS SES    │
+              └─────────────┘
+```
+
+### DEV_MODE 동작 방식
+
+| DEV_MODE | Oracle | Redis | AWS SES | 용도 |
+|----------|--------|-------|---------|------|
+| `true` | 모킹 데이터 | 모킹 | 파일 저장 | 로컬 개발/테스트 |
+| `false` | 실제 연결 | 실제 연결 | 실제 발송 | 운영 환경 |
+
+```bash
+# 로컬 개발 (.env.local)
+DEV_MODE=true
+
+# 운영 배포 (.env.prod)
+DEV_MODE=false
+```
+
+### 배포 체크리스트 (고객사 납품)
+
+**사전 준비 (고객사)**
+- [ ] Tank 전용 Oracle 계정 생성
+- [ ] 필요 테이블 스키마 적용
+- [ ] Tank 설치용 서버 준비 (Linux/Windows)
+- [ ] 방화벽: AWS SES 아웃바운드 허용 (443)
+
+**설치 작업 (개발사)**
+- [ ] Node.js 20.x LTS 설치
+- [ ] Redis 설치 및 서비스 등록
+- [ ] Tank 소스 배포
+- [ ] .env.prod 설정 (고객사 정보)
+- [ ] PM2 서비스 등록
+- [ ] 테스트 이메일 발송 검증
+
+**PM2 서비스 등록**
+```bash
+npm install -g pm2
+cd /app/backend && pm2 start dist/main.js --name tank-backend
+cd /app/worker && pm2 start dist/worker.js --name tank-worker
+pm2 startup && pm2 save
+```
+
+### AWS vs 고객사 서버 배포
+
+| 항목 | AWS 테스트 | 고객사 납품 |
+|------|-----------|------------|
+| Oracle | Cloud Free Tier | 고객사 자체 서버 |
+| Redis | Redis Cloud / 자체설치 | Tank 서버에 설치 |
+| 네트워크 | 인터넷 공개 | 사내망/VPN |
+| 접속 URL | http://IP:3000 | https://내부도메인 |
+| DEV_MODE | true (테스트) | false (운영) |
+
+---
+
 ## Reference Documents
 
 - [tank_react_nest_project_standard.md](./Claud%20MD%20file/tank_react_nest_project_standard.md)

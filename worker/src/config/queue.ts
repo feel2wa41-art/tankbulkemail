@@ -97,6 +97,13 @@ export interface EmailSendData {
   senderEmail: string;
   senderName: string;
   attachmentPath?: string;
+  // For SFTP attachments - pre-loaded data stored as base64
+  attachmentData?: {
+    fileName: string;
+    content: string; // base64 encoded
+    contentType: string;
+    size: number;
+  };
 }
 
 // Queue instances

@@ -14,6 +14,15 @@ interface TargetRow {
   [key: string]: any;
 }
 
+interface SftpConfig {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKey?: string;
+  remotePath: string;
+}
+
 interface AutomationConfig {
   autoId: number;
   autoName: string;
@@ -28,11 +37,15 @@ interface AutomationConfig {
   template: string;
   subjectTemplate: string;
   attachmentPattern?: string;
+  // SFTP Configuration (optional)
+  sftpConfig?: SftpConfig;
   // Email Settings
   senderEmail: string;
   senderName: string;
   replyTo?: string;
 }
+
+export type { AutomationConfig, SftpConfig, TargetRow };
 
 export class OracleService {
   private pool: oracledb.Pool | null = null;
@@ -96,11 +109,13 @@ export class OracleService {
         t.TARGET_QUERY, t.MAPPING_QUERY, t.UPDATE_QUERY,
         te.BODY_HTML as TEMPLATE, te.SUBJECT as SUBJECT_TEMPLATE,
         te.ATTACHMENT_PATTERN,
-        e.FROM_EMAIL as SENDER_EMAIL, e.FROM_NAME as SENDER_NAME, e.REPLY_TO
+        e.FROM_EMAIL as SENDER_EMAIL, e.FROM_NAME as SENDER_NAME, e.REPLY_TO,
+        sf.SFTP_HOST, sf.SFTP_PORT, sf.SFTP_USERNAME, sf.SFTP_PASSWORD, sf.SFTP_REMOTE_PATH
       FROM AUTOMATION a
       LEFT JOIN DBIO_TARGET t ON a.AUTO_ID = t.AUTO_ID
       LEFT JOIN TEMPLATE te ON a.AUTO_ID = te.AUTO_ID
       LEFT JOIN EMAIL_SETTING e ON a.AUTO_ID = e.AUTO_ID
+      LEFT JOIN SFTP_SETTING sf ON a.AUTO_ID = sf.AUTO_ID
       WHERE a.AUTO_ID = :autoId
     `;
 
@@ -111,6 +126,19 @@ export class OracleService {
     }
 
     const row = result[0];
+
+    // Build SFTP config if available
+    let sftpConfig: SftpConfig | undefined;
+    if (row.SFTP_HOST) {
+      sftpConfig = {
+        host: row.SFTP_HOST,
+        port: row.SFTP_PORT || 22,
+        username: row.SFTP_USERNAME,
+        password: row.SFTP_PASSWORD,
+        remotePath: row.SFTP_REMOTE_PATH || '/',
+      };
+    }
+
     return {
       autoId: row.AUTO_ID,
       autoName: row.AUTO_NAME,
@@ -121,6 +149,7 @@ export class OracleService {
       template: row.TEMPLATE,
       subjectTemplate: row.SUBJECT_TEMPLATE,
       attachmentPattern: row.ATTACHMENT_PATTERN,
+      sftpConfig,
       senderEmail: row.SENDER_EMAIL,
       senderName: row.SENDER_NAME,
       replyTo: row.REPLY_TO,

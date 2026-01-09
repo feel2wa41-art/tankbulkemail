@@ -79,6 +79,48 @@ export class UserRepository {
     await this.db.execute(sql, [passwordHash, userId]);
   }
 
+  async update(userId: number, data: {
+    userName?: string;
+    userEmail?: string;
+    role?: string;
+  }): Promise<void> {
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (data.userName) {
+      updates.push(`USER_NAME = :${paramIndex}`);
+      params.push(data.userName);
+      paramIndex++;
+    }
+
+    if (data.userEmail) {
+      updates.push(`USER_EMAIL = :${paramIndex}`);
+      params.push(data.userEmail);
+      paramIndex++;
+    }
+
+    if (data.role) {
+      updates.push(`ROLE = :${paramIndex}`);
+      params.push(data.role);
+      paramIndex++;
+    }
+
+    if (updates.length === 0) {
+      return;
+    }
+
+    updates.push('UPDATED_AT = SYSDATE');
+    params.push(userId);
+
+    const sql = `
+      UPDATE USERS
+      SET ${updates.join(', ')}
+      WHERE USER_ID = :${paramIndex}
+    `;
+    await this.db.execute(sql, params);
+  }
+
   async delete(userId: number): Promise<void> {
     // Soft delete
     const sql = `

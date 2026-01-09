@@ -24,9 +24,10 @@ export class AutomationController {
   constructor(private readonly automationService: AutomationService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get automations by organization' })
-  async findAll(@Query('orgId', ParseIntPipe) orgId: number) {
-    return this.automationService.findByOrg(orgId);
+  @ApiOperation({ summary: 'Get automations (optional orgId filter)' })
+  async findAll(@Query('orgId') orgId?: string) {
+    const parsedOrgId = orgId ? parseInt(orgId, 10) : undefined;
+    return this.automationService.findByOrg(parsedOrgId);
   }
 
   @Get(':id')

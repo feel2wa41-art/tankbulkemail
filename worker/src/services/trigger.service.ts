@@ -6,7 +6,7 @@ import * as http from 'http';
 import { createLogger } from '../config/logger';
 import { SchedulerService } from './scheduler.service';
 import { SesService } from './ses.service';
-import { getRedisConnection } from '../config/queue';
+import { getRedisConnection, getEmailJobQueue, getEmailSendQueue } from '../config/queue';
 
 const logger = createLogger('TriggerService');
 
@@ -54,6 +54,30 @@ export function createManualTriggerServer(port: number) {
     // GET /quota - SES 할당량 조회
     if (req.method === 'GET' && req.url === '/quota') {
       await handleQuota(req, res);
+      return;
+    }
+
+    // GET /queue/status - 큐 상태 조회
+    if (req.method === 'GET' && req.url === '/queue/status') {
+      await handleQueueStatus(req, res);
+      return;
+    }
+
+    // GET /queue/failed - 실패한 작업 목록
+    if (req.method === 'GET' && req.url?.startsWith('/queue/failed')) {
+      await handleQueueFailed(req, res);
+      return;
+    }
+
+    // POST /queue/retry/:jobId - 특정 작업 재시도
+    if (req.method === 'POST' && req.url?.startsWith('/queue/retry/') && !req.url.includes('retry-all')) {
+      await handleQueueRetry(req, res);
+      return;
+    }
+
+    // POST /queue/retry-all - 모든 실패 작업 재시도
+    if (req.method === 'POST' && req.url?.startsWith('/queue/retry-all')) {
+      await handleQueueRetryAll(req, res);
       return;
     }
 
@@ -179,5 +203,196 @@ async function handleQuota(req: http.IncomingMessage, res: http.ServerResponse) 
     logger.error('Failed to get SES quota:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: error.message || 'Unknown error' }));
+  }
+}
+
+/**
+ * GET /queue/status - 큐 상태 조회
+ */
+async function handleQueueStatus(req: http.IncomingMessage, res: http.ServerResponse) {
+  const devMode = process.env.DEV_MODE === 'true';
+
+  if (devMode) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: {
+        waiting: 0,
+        active: 0,
+        completed: 100,
+        failed: 2,
+        delayed: 0,
+      },
+    }));
+    return;
+  }
+
+  try {
+    const emailJobQueue = getEmailJobQueue();
+    const emailSendQueue = getEmailSendQueue();
+
+    const [jobCounts, sendCounts] = await Promise.all([
+      emailJobQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
+      emailSendQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
+    ]);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: {
+        waiting: (jobCounts.waiting || 0) + (sendCounts.waiting || 0),
+        active: (jobCounts.active || 0) + (sendCounts.active || 0),
+        completed: (jobCounts.completed || 0) + (sendCounts.completed || 0),
+        failed: (jobCounts.failed || 0) + (sendCounts.failed || 0),
+        delayed: (jobCounts.delayed || 0) + (sendCounts.delayed || 0),
+      },
+    }));
+  } catch (error: any) {
+    logger.error('Failed to get queue status:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: error.message }));
+  }
+}
+
+/**
+ * GET /queue/failed - 실패한 작업 목록
+ */
+async function handleQueueFailed(req: http.IncomingMessage, res: http.ServerResponse) {
+  const devMode = process.env.DEV_MODE === 'true';
+
+  // Parse query params
+  const url = new URL(req.url || '', `http://localhost`);
+  const autoId = url.searchParams.get('autoId');
+
+  if (devMode) {
+    // DEV 모드에서는 샘플 데이터 반환
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: [],
+    }));
+    return;
+  }
+
+  try {
+    const emailSendQueue = getEmailSendQueue();
+    const failedJobs = await emailSendQueue.getFailed(0, 100);
+
+    const filteredJobs = autoId
+      ? failedJobs.filter(job => job.data.autoId === parseInt(autoId, 10))
+      : failedJobs;
+
+    const result = filteredJobs.map(job => ({
+      id: job.id,
+      name: job.name,
+      data: {
+        runId: job.data.runId,
+        autoId: job.data.autoId,
+        recipient: job.data.email,
+        subject: job.data.subject,
+      },
+      failedReason: job.failedReason || 'Unknown error',
+      attemptsMade: job.attemptsMade,
+      timestamp: job.timestamp,
+    }));
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: result,
+    }));
+  } catch (error: any) {
+    logger.error('Failed to get failed jobs:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: error.message }));
+  }
+}
+
+/**
+ * POST /queue/retry/:jobId - 특정 작업 재시도
+ */
+async function handleQueueRetry(req: http.IncomingMessage, res: http.ServerResponse) {
+  const jobId = req.url!.split('/')[3];
+
+  if (!jobId) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: 'Job ID required' }));
+    return;
+  }
+
+  const devMode = process.env.DEV_MODE === 'true';
+
+  if (devMode) {
+    logger.info(`[DEV MODE] Would retry job: ${jobId}`);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: `Job ${jobId} queued for retry` }));
+    return;
+  }
+
+  try {
+    const emailSendQueue = getEmailSendQueue();
+    const job = await emailSendQueue.getJob(jobId);
+
+    if (!job) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'Job not found' }));
+      return;
+    }
+
+    await job.retry();
+    logger.info(`Job ${jobId} queued for retry`);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: `Job ${jobId} queued for retry` }));
+  } catch (error: any) {
+    logger.error(`Failed to retry job ${jobId}:`, error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: error.message }));
+  }
+}
+
+/**
+ * POST /queue/retry-all - 모든 실패 작업 재시도
+ */
+async function handleQueueRetryAll(req: http.IncomingMessage, res: http.ServerResponse) {
+  const devMode = process.env.DEV_MODE === 'true';
+
+  // Parse query params
+  const url = new URL(req.url || '', `http://localhost`);
+  const autoId = url.searchParams.get('autoId');
+
+  if (devMode) {
+    logger.info(`[DEV MODE] Would retry all failed jobs${autoId ? ` for autoId: ${autoId}` : ''}`);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: { retried: 0 } }));
+    return;
+  }
+
+  try {
+    const emailSendQueue = getEmailSendQueue();
+    const failedJobs = await emailSendQueue.getFailed(0, 1000);
+
+    const jobsToRetry = autoId
+      ? failedJobs.filter(job => job.data.autoId === parseInt(autoId, 10))
+      : failedJobs;
+
+    let retriedCount = 0;
+    for (const job of jobsToRetry) {
+      try {
+        await job.retry();
+        retriedCount++;
+      } catch (e) {
+        logger.warn(`Failed to retry job ${job.id}:`, e);
+      }
+    }
+
+    logger.info(`Retried ${retriedCount} failed jobs`);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: { retried: retriedCount } }));
+  } catch (error: any) {
+    logger.error('Failed to retry all jobs:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: error.message }));
   }
 }

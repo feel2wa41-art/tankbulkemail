@@ -8,6 +8,7 @@ import Automation from './pages/Automation';
 import AutomationDetail from './pages/Automation/AutomationDetail';
 import Org from './pages/Org';
 import Report from './pages/Report';
+import OperatorDashboard from './pages/Operator';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -33,6 +34,7 @@ function App() {
         <Route path="automation/:id" element={<AutomationDetail />} />
         <Route path="report" element={<Report />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="operator" element={<OperatorDashboard />} />
       </Route>
     </Routes>
   );
